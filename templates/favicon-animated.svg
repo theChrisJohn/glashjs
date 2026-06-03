@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- glashjs default animated favicon: a glash-green orbiting ring + pulsing core. -->
+  <circle cx="32" cy="32" r="22" fill="none" stroke="#22c55e" stroke-width="6"
+          stroke-linecap="round" stroke-dasharray="70 200" opacity="0.95">
+    <animateTransform attributeName="transform" type="rotate"
+                      from="0 32 32" to="360 32 32" dur="1.4s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="32" cy="32" r="9" fill="#22c55e">
+    <animate attributeName="opacity" values="1;0.35;1" dur="1.4s" repeatCount="indefinite"/>
+    <animate attributeName="r" values="9;7;9" dur="1.4s" repeatCount="indefinite"/>
+  </circle>
+</svg>

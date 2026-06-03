@@ -1,0 +1,76 @@
+{
+  "name": "glashjs",
+  "version": "0.7.2",
+  "description": "glashjs — a web framework built on top of Next.js: file-based routing, SSR, API routes, JSX components with client hydration, nested layouts, streaming SSR, a best-in-class build-time asset optimizer, offline PWA layer, animated favicon, and secure-by-default headers. Zero mandatory dependencies.",
+  "type": "module",
+  "bin": {
+    "glash": "bin/glash.mjs"
+  },
+  "exports": {
+    ".": "./src/index.mjs",
+    "./config": "./src/config.mjs",
+    "./security": "./src/security/headers.mjs",
+    "./image": "./src/components/image.mjs",
+    "./video": "./src/components/video.mjs",
+    "./link": "./src/components/link.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "src",
+    "templates"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "peerDependencies": {
+    "esbuild": ">=0.20.0",
+    "preact": "^10.25.0",
+    "preact-render-to-string": "^6.5.0",
+    "sharp": "^0.34.5"
+  },
+  "peerDependenciesMeta": {
+    "sharp": {
+      "optional": true
+    },
+    "esbuild": {
+      "optional": true
+    },
+    "preact": {
+      "optional": true
+    },
+    "preact-render-to-string": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "glash",
+    "glashdb",
+    "framework",
+    "offline",
+    "pwa",
+    "asset-optimization",
+    "avif",
+    "brotli",
+    "security",
+    "routing",
+    "ssr",
+    "api",
+    "server",
+    "web-framework"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "esbuild": "^0.28.0",
+    "preact": "^10.29.2",
+    "preact-render-to-string": "^6.7.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/theChrisJohn/glashjs.git"
+  },
+  "homepage": "https://github.com/theChrisJohn/glashjs#readme",
+  "bugs": {
+    "url": "https://github.com/theChrisJohn/glashjs/issues"
+  }
+}

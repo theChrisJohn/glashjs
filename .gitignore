@@ -1,0 +1,9 @@
+node_modules/
+.glash/
+# generated asset variants (build outputs, never source)
+**/*.br
+**/*.gz
+**/*.avif
+**/*.webp
+**/*.glash.webm
+**/*.poster.jpg
