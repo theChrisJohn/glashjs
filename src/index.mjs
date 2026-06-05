@@ -9,8 +9,8 @@ export { generateServiceWorker } from './offline/generate-sw.mjs';
 export { securityHeaders, buildCsp, sri, glashSecurity } from './security/headers.mjs';
 export { createGlashServer, json, redirect } from './server/server.mjs';
 export { discoverRoutes, matchRoute, findMiddleware } from './server/router.mjs';
-export { html, raw, escapeHtml, renderDocument } from './server/html.mjs';
-export { Image } from './components/image.mjs';
-export { Video } from './components/video.mjs';
-export { Link } from './components/link.mjs';
-export { renderMeta } from './server/html.mjs';
+export { html, raw, escapeHtml, renderDocument, renderMeta } from './server/html.mjs';
+// NOTE: <Image>/<Video>/<Link> are Preact components, so they live on subpaths
+// (glashjs/image, glashjs/video, glashjs/link) and are NOT re-exported here —
+// otherwise importing anything from 'glashjs' would require preact to be
+// installed, breaking the zero-dependency core (html/json/createGlashServer/build).
