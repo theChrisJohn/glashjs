@@ -84,14 +84,14 @@ async function main() {
     default:
       console.log(`glashjs — fast, offline-capable, hard-to-hack sites
 
-Usage:
-  glash dev [--port 3000]       Run the dev server (file-based routing, SSR, API, live reload)
-  glash serve [--port 3000]     Run the production server over routes/ + built assets
-  glash build [--root <dir>]    Optimize assets, generate offline SW + PWA + security manifests
-  glash deploy [--dry-run]      Build, then deploy to glashdb (hands off to the glashdb CLI)
-  glash update                  Update glashjs to the latest published version
-  glash optimize [<dir>]        Just run the asset optimizer over a directory
-  glash version                 Print version
+Usage: (run as "glashjs <cmd>"; "glash <cmd>" also works unless the glashdb deploy CLI owns that name)
+  glashjs dev [--port 3000]     Run the dev server (routing, SSR, API, live reload) + Network preview URL
+  glashjs serve [--port 3000]   Run the production server over routes/ + built assets
+  glashjs build [--root <dir>]  Optimize assets, precompile routes, generate offline SW + PWA + security
+  glashjs update                Update glashjs to the latest published version
+  glashjs deploy [--dry-run]    Build, then deploy to glashdb (hands off to the glashdb CLI)
+  glashjs optimize [<dir>]      Just run the asset optimizer over a directory
+  glashjs version               Print version
 
 Docs: ./README.md`);
   }

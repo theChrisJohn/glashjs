@@ -75,13 +75,18 @@ export const POST = (ctx) => json({ created: ctx.body }, { status: 201 });
 ```
 
 ```bash
-glash dev      # dev server (live reload) — prints a Local + Network (LAN IP) URL
-               #   ➜ Local:    http://localhost:3000
-               #   ➜ Network:  http://192.168.1.57:3000   (open from your phone/other devices)
-glash serve    # production server over routes/ + built assets (Brotli-negotiated)
-glash update   # update glashjs to the latest published version
-glash deploy   # build, then deploy to glashdb
+glashjs dev      # dev server (live reload) — prints a Local + Network (LAN IP) URL
+                 #   ➜ Local:    http://localhost:3000
+                 #   ➜ Network:  http://192.168.1.57:3000   (open from your phone/other devices)
+glashjs serve    # production server over routes/ + built assets (Brotli-negotiated)
+glashjs update   # update glashjs to the latest published version
+glashjs build    # optimize assets + precompile routes
+glashjs deploy   # build, then deploy to glashdb
 ```
+
+> glashjs installs **two** bins — `glashjs` and `glash` — both run the same CLI.
+> Use **`glashjs <cmd>`** in projects that also have the `@glash/cli`/`glashdb`
+> deploy CLI installed, since that package owns the `glash` name there.
 
 **`<Image>`** (better than `next/image` — no runtime image server, uses the build's AVIF/WebP):
 ```jsx
