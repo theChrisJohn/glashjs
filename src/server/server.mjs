@@ -131,6 +131,15 @@ async function handleApi(res, mod, req, ctx, secHeaders) {
   }
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) ctx.body = await readJson(req);
   const result = await handler(ctx);
+  // Next-style route handlers return a Web `Response` (e.g. Response.json(...)).
+  // Pass it through so migrated API routes work unchanged.
+  if (typeof Response !== 'undefined' && result instanceof Response) {
+    const headers = { ...secHeaders };
+    result.headers.forEach((v, k) => { headers[k] = v; });
+    const buf = Buffer.from(await result.arrayBuffer());
+    res.writeHead(result.status || 200, headers);
+    return res.end(buf);
+  }
   if (result && result.__response) {
     return send(res, result.status || 200, result.contentType || 'application/json',
       typeof result.body === 'string' ? result.body : JSON.stringify(result.body), { ...secHeaders, ...(result.headers || {}) });
