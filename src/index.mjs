@@ -3,6 +3,7 @@ export { defineConfig, loadConfig, DEFAULT_CONFIG } from './config.mjs';
 export { build } from './build.mjs';
 export { deploy } from './deploy.mjs';
 export { update } from './update.mjs';
+export { migrate } from './migrate.mjs';
 export { optimizeAssets } from './assets/optimize.mjs';
 export { generateAnimatedFavicon } from './assets/animated-favicon.mjs';
 export { generateServiceWorker } from './offline/generate-sw.mjs';

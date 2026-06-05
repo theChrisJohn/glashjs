@@ -14,7 +14,7 @@ import { pathToFileURL } from 'node:url';
 import { discoverRoutes, matchRoute, findMiddleware } from './router.mjs';
 import { renderDocument, documentParts, renderMeta, escapeHtml } from './html.mjs';
 import { NAV_CLIENT } from './nav-client.mjs';
-import { isComponentRoute, loadComponentRoute, clientBundle, renderComponent, composeVNode, getPipeableRenderer, routeId, findLayouts, clearJsxCaches } from './jsx.mjs';
+import { isComponentRoute, loadComponentRoute, clientBundle, renderComponent, composeVNode, getPipeableRenderer, routeId, findLayouts, clearJsxCaches, compileModule } from './jsx.mjs';
 import { securityHeaders } from '../security/headers.mjs';
 import { loadConfig } from '../config.mjs';
 
@@ -83,7 +83,7 @@ export async function createGlashServer({ root = process.cwd(), dev = false } = 
       const ctx = makeCtx(req, res, url, match.params);
       // Run the middleware chain (root -> leaf). Any return value short-circuits.
       for (const mwFile of findMiddleware(routesDir, match.route.file)) {
-        const mwMod = await importRoute(mwFile);
+        const mwMod = await compileModule(mwFile, root, dev);
         const mw = mwMod.default || mwMod.middleware;
         if (typeof mw !== 'function') continue;
         const result = await mw(ctx);
@@ -94,13 +94,13 @@ export async function createGlashServer({ root = process.cwd(), dev = false } = 
         return send(res, 200, match.route.isApi ? 'application/json' : 'text/html; charset=utf-8', '', secHeaders);
       }
       if (match.route.isApi) {
-        const mod = await importRoute(match.route.file);
+        const mod = await compileModule(match.route.file, root, dev);
         return await handleApi(res, mod, req, ctx, secHeaders);
       }
       if (isComponentRoute(match.route.file)) {
         return await handleComponentPage(res, match.route, ctx, cfg, secHeaders, root, routesDir, dev);
       }
-      const mod = await importRoute(match.route.file);
+      const mod = await compileModule(match.route.file, root, dev);
       return await handlePage(res, mod, ctx, cfg, secHeaders, dev);
     } catch (err) {
       if (res.headersSent) return res.end(); // error mid-stream — can't replace headers

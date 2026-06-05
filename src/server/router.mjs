@@ -38,7 +38,8 @@ export async function discoverRoutes(routesDir) {
   const files = [];
   await walk(root, root, files);
   const routes = files
-    .filter((f) => /\.(mjs|js|jsx|tsx)$/.test(f.rel))
+    .filter((f) => /\.(mjs|js|jsx|tsx|ts)$/.test(f.rel))
+    .filter((f) => !/\.d\.ts$/.test(f.rel))
     // `_`-prefixed files are private (layouts, helpers) — not routes.
     .filter((f) => !f.rel.split('/').some((seg) => seg.startsWith('_')))
     .map((f) => toRoute(f.rel, f.file));
@@ -58,7 +59,7 @@ async function walk(root, dir, out) {
 }
 
 function toRoute(rel, file) {
-  const clean = rel.replace(/\.(mjs|js|jsx|tsx)$/, '');
+  const clean = rel.replace(/\.(mjs|js|jsx|tsx|ts)$/, '');
   const isApi = clean === 'api' || clean.startsWith('api/');
   const segs = [];
   for (const part of clean.split('/').filter(Boolean)) {

@@ -127,6 +127,37 @@ Hydration is **CSP-safe**: server props ride in a non-executed `<script type="ap
 
 **Nested layouts** (`_layout.jsx` in any routes dir wrap pages root→leaf, server + hydration), **streaming SSR** (the shell flushes before the component renders — `Transfer-Encoding: chunked`), and **instant HMR** (`glash dev` does an in-place soft re-render on save over SSE — no full reload, no flash, and scroll/focus/form-input are preserved across the swap) are all in. **Suspense streaming** is in too — wrap a data-dependent subtree in `<Suspense fallback={…}>` (from `preact/compat`) and the shell + fallback flush immediately, then each boundary streams in as its data resolves (`renderToPipeableStream`), with preact's inline swap scripts nonce-injected so the strict CSP holds. **Honest scope:** uses Preact (React-compatible via `preact/compat`), not React; HMR preserves DOM/scroll/input state but **not** component `useState` (that's React-Fast-Refresh via `@prefresh`, still ahead).
 
+## Migrating from Next.js
+
+glashjs is a Next.js alternative with the same conventions, so an existing Next app can be moved over with one command:
+
+```bash
+npx glashjs migrate          # scaffold routes/ from your app/ or pages/ + a report
+npx glashjs migrate --dry-run  # preview the mapping first, write nothing
+```
+
+`glashjs migrate` does the **mechanical** migration and writes a `MIGRATION.md` punch-list — it never deletes your Next code:
+
+| Next.js | → | glashjs |
+|---|---|---|
+| `app/page.tsx` | → | `routes/index.tsx` |
+| `app/blog/[slug]/page.tsx` | → | `routes/blog/[slug].tsx` |
+| `app/layout.tsx` | → | `routes/_layout.tsx` |
+| `app/api/x/route.ts` (`GET`/`POST`) | → | `routes/api/x.ts` (same `GET`/`POST` exports) |
+| `pages/index.tsx`, `pages/api/x.ts` | → | `routes/index.tsx`, `routes/api/x.ts` |
+| `middleware.ts` | → | `routes/_middleware.mjs` |
+| `getServerSideProps` | → | `getServerData(ctx)` (auto-renamed) |
+| `next/link`, `next/image` | → | `glashjs/link`, `glashjs/image` (auto-rewritten) |
+
+Your **React/Next components run as-is**: glashjs aliases `react`/`react-dom` → `preact/compat` in its build, and runs **TypeScript** routes/API/middleware directly (esbuild). `'use client'` is stripped (glashjs hydrates by default).
+
+```bash
+npm i glashjs preact preact-render-to-string esbuild
+npx glashjs dev      # then work the TODOs the report flagged
+```
+
+**Honest scope:** the mechanical 80% is automatic. **React Server Components**, **Server Actions**, `getStaticProps` (SSG), and `next/navigation`/`next/headers`/Supabase-server-auth are **flagged in `MIGRATION.md` for hands-on porting** — they don't map 1:1 and glashjs won't pretend they do.
+
 ## Usage
 
 ```js

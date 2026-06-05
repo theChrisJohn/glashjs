@@ -38,8 +38,40 @@ async function preactRuntime() {
   return { h: _h, renderToString: _renderToString };
 }
 
+// Make migrated React/Next components compile + run under Preact.
+const REACT_ALIAS = {
+  react: 'preact/compat',
+  'react-dom': 'preact/compat',
+  'react-dom/client': 'preact/compat',
+  'react/jsx-runtime': 'preact/jsx-runtime',
+  'react/jsx-dev-runtime': 'preact/jsx-runtime',
+};
+
 export function isComponentRoute(file) {
   return /\.(jsx|tsx)$/.test(file);
+}
+
+/**
+ * Import any route/middleware module. Plain `.mjs`/`.js` import directly (zero
+ * dep); `.ts`/`.tsx`/`.jsx` are esbuild-compiled first (so migrated TypeScript
+ * API routes & middleware run). Used for API routes and `_middleware`.
+ */
+export async function compileModule(file, root, dev) {
+  if (/\.(mjs|js)$/.test(file)) {
+    return import(pathToFileURL(file).href + (dev ? `?t=${Date.now()}` : ''));
+  }
+  const eb = await esbuild();
+  if (!eb) throw new Error('TypeScript routes need esbuild: npm i esbuild');
+  const out = path.join(root, '.glash', 'server', 'mod-' + routeId(file) + '.mjs');
+  if (!dev && existsSync(out)) return import(pathToFileURL(out).href);
+  await fs.mkdir(path.dirname(out), { recursive: true });
+  await eb.build({
+    entryPoints: [file], bundle: true, platform: 'node', format: 'esm',
+    jsx: 'automatic', jsxImportSource: 'preact',
+    external: ['preact', 'preact/*', 'preact-render-to-string'],
+    alias: REACT_ALIAS, outfile: out, logLevel: 'silent',
+  });
+  return import(pathToFileURL(out).href + (dev ? `?t=${Date.now()}` : ''));
 }
 
 export function routeId(file) {
@@ -119,6 +151,7 @@ export async function loadComponentRoute(pageFile, layouts, root, dev, force = f
     stdin: { contents: serverEntry(pageFile, layouts), resolveDir: path.dirname(pageFile), loader: 'js', sourcefile: 'glash-server-entry.js' },
     bundle: true, platform: 'node', format: 'esm', jsx: 'automatic', jsxImportSource: 'preact',
     external: ['preact', 'preact/*', 'preact-render-to-string'],
+    alias: REACT_ALIAS,
     outfile: out, logLevel: 'silent',
   });
   const mod = await import(pathToFileURL(out).href + (dev ? `?t=${Date.now()}` : ''));
@@ -135,6 +168,7 @@ export async function clientBundle(pageFile, layouts, dev) {
   const res = await eb.build({
     stdin: { contents: clientEntry(pageFile, layouts), resolveDir: path.dirname(pageFile), loader: 'jsx', sourcefile: 'glash-client-entry.jsx' },
     bundle: true, platform: 'browser', format: 'esm', minify: !dev, jsx: 'automatic', jsxImportSource: 'preact',
+    alias: REACT_ALIAS,
     write: false, logLevel: 'silent',
   });
   const js = res.outputFiles[0].text;

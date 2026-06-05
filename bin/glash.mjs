@@ -7,6 +7,7 @@ import { optimizeAssets } from '../src/assets/optimize.mjs';
 import { createGlashServer } from '../src/server/server.mjs';
 import { deploy } from '../src/deploy.mjs';
 import { update } from '../src/update.mjs';
+import { migrate } from '../src/migrate.mjs';
 
 const VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 const [, , cmd, ...rest] = process.argv;
@@ -61,6 +62,9 @@ async function main() {
     case 'upgrade':
       await update({ root: arg('--root', process.cwd()) });
       break;
+    case 'migrate':
+      await migrate({ root: arg('--root', process.cwd()), dryRun: rest.includes('--dry-run') });
+      break;
     case 'dev':
       await serve(true);
       break;
@@ -88,6 +92,7 @@ Usage: (run as "glashjs <cmd>"; "glash <cmd>" also works unless the glashdb depl
   glashjs dev [--port 3000]     Run the dev server (routing, SSR, API, live reload) + Network preview URL
   glashjs serve [--port 3000]   Run the production server over routes/ + built assets
   glashjs build [--root <dir>]  Optimize assets, precompile routes, generate offline SW + PWA + security
+  glashjs migrate [--dry-run]   Migrate a Next.js project to glashjs (scaffold routes/ + report)
   glashjs update                Update glashjs to the latest published version
   glashjs deploy [--dry-run]    Build, then deploy to glashdb (hands off to the glashdb CLI)
   glashjs optimize [<dir>]      Just run the asset optimizer over a directory
