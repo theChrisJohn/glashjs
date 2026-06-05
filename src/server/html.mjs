@@ -57,9 +57,11 @@ function shellTail({ offline = true, animatedFavicon = true, dev = false, nonce 
   const off = offline
     ? `<script type="module"${n}>try{const m=await import("/glash-offline.mjs");m.registerGlashOffline&&m.registerGlashOffline();}catch{}</script>`
     : '';
-  // Dev live-reload: a nonce'd inline script (CSP-safe) that reloads on change.
+  // Dev HMR: a nonce'd inline script (CSP-safe). On a change event it does an
+  // in-place soft refresh (no full reload, keeps scroll/focus/inputs), falling
+  // back to a full reload if the nav runtime hasn't loaded yet.
   const hmr = dev
-    ? `<script${n}>try{new EventSource("/_glash/hmr").onmessage=function(e){if(e.data==="reload")location.reload();};}catch(e){}</script>`
+    ? `<script${n}>try{new EventSource("/_glash/hmr").onmessage=function(e){if(e.data==="reload"){if(window.__glashSoftRefresh){window.__glashSoftRefresh();}else{location.reload();}}};}catch(e){}</script>`
     : '';
   // Client-side navigation runtime (external 'self' module, CSP-safe).
   const nav = '<script type="module" src="/_glash/nav.js"></script>';

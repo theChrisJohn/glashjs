@@ -116,7 +116,7 @@ export default function Counter({ start = 0 }) {
 
 Hydration is **CSP-safe**: server props ride in a non-executed `<script type="application/json">` and the hydration bundle is an external `'self'` module with a per-request **nonce** — so the strict CSP stays intact (no `'unsafe-inline'`).
 
-**Nested layouts** (`_layout.jsx` in any routes dir wrap pages root→leaf, server + hydration), **streaming SSR** (the shell flushes before the component renders — `Transfer-Encoding: chunked`), and **dev live-reload** (`glash dev` auto-refreshes on save over SSE) are all in. **Honest scope:** uses Preact (React-compatible via `preact/compat`), not React; live-reload is auto-refresh, not yet state-preserving fast-refresh; streaming is shell-flush, not Suspense-chunked.
+**Nested layouts** (`_layout.jsx` in any routes dir wrap pages root→leaf, server + hydration), **streaming SSR** (the shell flushes before the component renders — `Transfer-Encoding: chunked`), and **instant HMR** (`glash dev` does an in-place soft re-render on save over SSE — no full reload, no flash, and scroll/focus/form-input are preserved across the swap) are all in. **Honest scope:** uses Preact (React-compatible via `preact/compat`), not React; HMR preserves DOM/scroll/input state but **not** component `useState` (that's React-Fast-Refresh via `@prefresh`, still ahead); streaming is shell-flush, not Suspense-chunked.
 
 ## Usage
 
@@ -169,7 +169,7 @@ animatedFavicon: true,                         // bundled animated glash mark (d
 - [x] Client-JS bundling (esbuild) per route
 - [x] Nested layouts (`_layout.jsx` composing root→leaf, server + hydration)
 - [x] Streaming SSR (shell flushed before the component renders)
-- [x] Dev live-reload over SSE (auto-refresh on save)
+- [x] Instant HMR — in-place soft re-render on save (no full reload, no flash; preserves scroll, focus, and form input)
 - [x] `<Image>` — zero-config `<picture>` with AVIF/WebP from the optimizer (beats next/image: no runtime image server)
 - [x] `<Video>` — `<video>` with AV1/WebM + mp4 fallback + auto poster
 - [x] File-based middleware (`_middleware.mjs`, root→leaf) — auth, redirects, headers
@@ -178,7 +178,7 @@ animatedFavicon: true,                         // bundled animated glash mark (d
 - [x] `<Link>` client-side navigation (SPA swap of `#glash-root` + re-hydrate; progressive-enhancement `<a>`)
 - [x] `glash deploy` → glashdb (builds, then hands off to the `glashdb` CLI)
 - [x] Production-grade runtime — custom `404`/`500` routes, dev error overlay, HEAD support, Range requests + streamed static (video seeking), graceful mid-stream error handling
-- [ ] State-preserving fast-refresh, Suspense streaming, edge adapter
+- [ ] React-Fast-Refresh (`useState` preservation via `@prefresh`), Suspense streaming, edge adapter
 - [ ] `<Image>` / `<Video>` components that emit `<picture>`/`<source>` from the manifest
 - [ ] Edge adapter for the glashdb Worker (serve `.br`/`.avif` by `Accept`)
 - [ ] `glash deploy` → glashdb hosting in one command
