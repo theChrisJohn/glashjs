@@ -59,6 +59,8 @@ routes/
   blog/[slug].mjs    ->  /blog/:slug       (dynamic segment -> ctx.params.slug)
   docs/[...path].mjs ->  /docs/*           (catch-all)
   api/hello.mjs      ->  /api/hello        (API: export GET/POST/…)
+  404.jsx            ->  custom not-found page (any unmatched path -> 404)
+  500.jsx            ->  custom error page (rendered in production on a throw)
 ```
 
 ```js
@@ -174,7 +176,9 @@ animatedFavicon: true,                         // bundled animated glash mark (d
 - [x] Production route precompile (`glash build` bakes server modules + minified client bundles → no runtime esbuild on `glash serve`)
 - [x] SEO metadata API (`export const metadata` → title, description, Open Graph, Twitter cards)
 - [x] `<Link>` client-side navigation (SPA swap of `#glash-root` + re-hydrate; progressive-enhancement `<a>`)
-- [ ] State-preserving fast-refresh, Suspense streaming, `glash deploy` → glashdb
+- [x] `glash deploy` → glashdb (builds, then hands off to the `glashdb` CLI)
+- [x] Production-grade runtime — custom `404`/`500` routes, dev error overlay, HEAD support, Range requests + streamed static (video seeking), graceful mid-stream error handling
+- [ ] State-preserving fast-refresh, Suspense streaming, edge adapter
 - [ ] `<Image>` / `<Video>` components that emit `<picture>`/`<source>` from the manifest
 - [ ] Edge adapter for the glashdb Worker (serve `.br`/`.avif` by `Accept`)
 - [ ] `glash deploy` → glashdb hosting in one command

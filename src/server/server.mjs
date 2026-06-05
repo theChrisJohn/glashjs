@@ -6,12 +6,12 @@
 //                 service worker, favicons) with Brotli negotiation.
 // Every response carries the secure-by-default headers.
 import http from 'node:http';
-import { promises as fs, existsSync, statSync, watch } from 'node:fs';
+import { promises as fs, existsSync, statSync, watch, createReadStream } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { discoverRoutes, matchRoute, findMiddleware } from './router.mjs';
-import { renderDocument, documentParts, renderMeta } from './html.mjs';
+import { renderDocument, documentParts, renderMeta, escapeHtml } from './html.mjs';
 import { NAV_CLIENT } from './nav-client.mjs';
 import { isComponentRoute, loadComponentRoute, clientBundle, renderComponent, routeId, findLayouts, clearJsxCaches } from './jsx.mjs';
 import { securityHeaders } from '../security/headers.mjs';
@@ -78,7 +78,7 @@ export async function createGlashServer({ root = process.cwd(), dev = false } = 
         return send(res, 200, 'text/javascript; charset=utf-8', js, { ...secHeaders, 'cache-control': dev ? 'no-store' : 'public, max-age=31536000, immutable' });
       }
       const match = matchRoute(routes, pathname);
-      if (!match) return send(res, 404, 'text/plain; charset=utf-8', 'Not found', secHeaders);
+      if (!match) return await handleNotFound(res, routes, req, url, cfg, secHeaders, root, routesDir, dev);
       const ctx = makeCtx(req, res, url, match.params);
       // Run the middleware chain (root -> leaf). Any return value short-circuits.
       for (const mwFile of findMiddleware(routesDir, match.route.file)) {
@@ -87,6 +87,10 @@ export async function createGlashServer({ root = process.cwd(), dev = false } = 
         if (typeof mw !== 'function') continue;
         const result = await mw(ctx);
         if (result) return sendMiddlewareResult(res, result, secHeaders);
+      }
+      // HEAD: same status/headers as GET, no body (cheap — skip rendering).
+      if (req.method === 'HEAD') {
+        return send(res, 200, match.route.isApi ? 'application/json' : 'text/html; charset=utf-8', '', secHeaders);
       }
       if (match.route.isApi) {
         const mod = await importRoute(match.route.file);
@@ -98,8 +102,17 @@ export async function createGlashServer({ root = process.cwd(), dev = false } = 
       const mod = await importRoute(match.route.file);
       return await handlePage(res, mod, ctx, cfg, secHeaders, dev);
     } catch (err) {
-      const msg = dev ? `glashjs error:\n${err?.stack || err}` : 'Internal Server Error';
-      send(res, 500, 'text/plain; charset=utf-8', msg, secHeaders);
+      if (res.headersSent) return res.end(); // error mid-stream — can't replace headers
+      if (dev) return send(res, 500, 'text/html; charset=utf-8', devErrorOverlay(err), secHeaders);
+      try {
+        const r500 = routes.find((r) => r.pattern === '/500');
+        if (r500) {
+          const ctx = makeCtx(req, res, url, {});
+          const { html, nonce } = await renderStandalone(r500, ctx, cfg, root, routesDir, dev);
+          return send(res, 500, 'text/html; charset=utf-8', html, pageHeaders(cfg, secHeaders, nonce));
+        }
+      } catch { /* fall back to the default page */ }
+      send(res, 500, 'text/html; charset=utf-8', defaultErrorHtml(500, 'Something went wrong'), secHeaders);
     }
   });
 
@@ -166,9 +179,18 @@ async function handleComponentPage(res, route, ctx, cfg, secHeaders, root, route
   });
   res.writeHead(200, { ...pageHeaders(cfg, secHeaders, nonce), 'content-type': 'text/html; charset=utf-8' });
   res.write(open); // flush the shell first, before rendering the component
-  const rendered = await renderComponent(mod, props);
-  res.write(`<div id="glash-root">${rendered}</div><script type="module" src="/_glash/${id}.js"></script>`);
-  res.end(tail);
+  try {
+    const rendered = await renderComponent(mod, props);
+    res.write(`<div id="glash-root">${rendered}</div><script type="module" src="/_glash/${id}.js"></script>`);
+    res.end(tail);
+  } catch (err) {
+    // Shell is already on the wire, so we can't change the status — surface the
+    // error inside the stream (full overlay in dev, a clean message in prod).
+    res.write(dev
+      ? `<pre style="color:#ff6b6b;white-space:pre-wrap;font:13px ui-monospace,monospace;padding:1rem">${escapeHtml(String(err?.stack || err))}</pre>`
+      : '<p style="font:16px system-ui;color:#9aa0aa;padding:1rem">Something went wrong rendering this page.</p>');
+    res.end(tail);
+  }
 }
 
 // metadata export may be a plain object or a (ctx) => object function.
@@ -194,20 +216,91 @@ async function serveStatic(res, outDir, pathname, req, secHeaders) {
   const rel = pathname.replace(/^\/+/, '');
   const file = path.join(outDir, rel);
   if (!file.startsWith(outDir + path.sep)) return false; // path traversal guard
+  const head = req.method === 'HEAD';
+  const range = req.headers.range;
   const ae = String(req.headers['accept-encoding'] || '');
-  if (ae.includes('br') && existsSync(file + '.br')) {
+
+  // Brotli precompressed sibling — only when the client isn't asking for a byte range.
+  if (!range && ae.includes('br') && existsSync(file + '.br')) {
     const buf = await fs.readFile(file + '.br');
-    res.writeHead(200, { ...secHeaders, 'content-type': mime(file), 'content-encoding': 'br', 'cache-control': 'public, max-age=31536000, immutable' });
-    res.end(buf);
+    res.writeHead(200, { ...secHeaders, 'content-type': mime(file), 'content-encoding': 'br', vary: 'Accept-Encoding', 'cache-control': 'public, max-age=31536000, immutable' });
+    res.end(head ? undefined : buf);
     return true;
   }
-  if (existsSync(file) && statSync(file).isFile()) {
-    const buf = await fs.readFile(file);
-    res.writeHead(200, { ...secHeaders, 'content-type': mime(file), 'cache-control': 'public, max-age=3600' });
-    res.end(buf);
+  if (!(existsSync(file) && statSync(file).isFile())) return false;
+
+  const stat = statSync(file);
+  const ct = mime(file);
+  // Range requests (video/audio seeking) -> 206 Partial Content.
+  if (range) {
+    const m = /bytes=(\d*)-(\d*)/.exec(range);
+    const start = m && m[1] ? parseInt(m[1], 10) : 0;
+    const end = m && m[2] ? parseInt(m[2], 10) : stat.size - 1;
+    if (Number.isNaN(start) || Number.isNaN(end) || start > end || end >= stat.size) {
+      res.writeHead(416, { ...secHeaders, 'content-range': `bytes */${stat.size}` });
+      res.end();
+      return true;
+    }
+    res.writeHead(206, { ...secHeaders, 'content-type': ct, 'accept-ranges': 'bytes', 'content-range': `bytes ${start}-${end}/${stat.size}`, 'content-length': end - start + 1, 'cache-control': 'public, max-age=3600' });
+    if (head) { res.end(); return true; }
+    createReadStream(file, { start, end }).pipe(res);
     return true;
   }
-  return false;
+  // Full file — streamed (handles large assets without buffering them in memory).
+  res.writeHead(200, { ...secHeaders, 'content-type': ct, 'accept-ranges': 'bytes', 'content-length': stat.size, 'cache-control': 'public, max-age=3600' });
+  if (head) { res.end(); return true; }
+  createReadStream(file).pipe(res);
+  return true;
+}
+
+/** Render a 404/500 route (or any route) to a full HTML document string. */
+async function renderStandalone(route, ctx, cfg, root, routesDir, dev) {
+  const nonce = randomBytes(16).toString('base64');
+  if (isComponentRoute(route.file)) {
+    const layouts = findLayouts(routesDir, route.file);
+    const mod = await loadComponentRoute(route.file, layouts, root, dev);
+    const props = (typeof mod.getServerData === 'function' ? await mod.getServerData(ctx) : {}) || {};
+    const meta = await resolveMeta(mod.metadata, ctx);
+    const rendered = await renderComponent(mod, props);
+    const head = renderMeta(meta) + `<script type="application/json" id="glash-props">${safeJson(props)}</script>`;
+    const body = `<div id="glash-root">${rendered}</div><script type="module" src="/_glash/${routeId(route.file)}.js"></script>`;
+    return { html: renderDocument({ title: meta.title || mod.title || cfg.name, head, body, offline: cfg.offline, animatedFavicon: !!cfg.animatedFavicon, nonce, dev }), nonce };
+  }
+  const mod = await import(pathToFileURL(route.file).href + (dev ? `?t=${Date.now()}` : ''));
+  const out = typeof mod.default === 'function' ? await mod.default(ctx) : '';
+  const page = typeof out === 'string' || (out && out.__raw) ? { body: out } : (out || {});
+  const meta = await resolveMeta(page.metadata || mod.metadata, ctx);
+  return { html: renderDocument({ title: meta.title || page.title || mod.title || cfg.name, head: renderMeta(meta) + (page.head ? (page.head.__raw || page.head) : ''), body: page.body ?? '', offline: cfg.offline, animatedFavicon: !!cfg.animatedFavicon, nonce, dev }), nonce };
+}
+
+/** 404: render a custom `404` route if present, else a clean default page. */
+async function handleNotFound(res, routes, req, url, cfg, secHeaders, root, routesDir, dev) {
+  const r404 = routes.find((r) => r.pattern === '/404');
+  if (r404) {
+    try {
+      const ctx = makeCtx(req, res, url, {});
+      const { html, nonce } = await renderStandalone(r404, ctx, cfg, root, routesDir, dev);
+      return send(res, 404, 'text/html; charset=utf-8', req.method === 'HEAD' ? '' : html, pageHeaders(cfg, secHeaders, nonce));
+    } catch { /* fall back to default */ }
+  }
+  send(res, 404, 'text/html; charset=utf-8', req.method === 'HEAD' ? '' : defaultErrorHtml(404, 'Page not found'), secHeaders);
+}
+
+function defaultErrorHtml(status, message) {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${status}</title></head>
+<body style="font:16px/1.5 system-ui,sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0d12;color:#e8eaed">
+<main style="text-align:center;padding:2rem"><h1 style="font-size:3rem;margin:0;color:#22c55e">${status}</h1><p style="color:#9aa0aa">${escapeHtml(message)}</p></main>
+</body></html>`;
+}
+
+function devErrorOverlay(err) {
+  const stack = escapeHtml(String(err?.stack || err));
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>glashjs — error</title></head>
+<body style="font:14px ui-monospace,SFMono-Regular,Menlo,monospace;background:#1a0f12;color:#ffd7d7;margin:0;padding:2rem">
+<h1 style="color:#ff6b6b;font-size:1.1rem">⚠ glashjs runtime error</h1>
+<pre style="white-space:pre-wrap;background:#0a0608;border:1px solid #3a1f25;border-radius:8px;padding:1rem;overflow:auto">${stack}</pre>
+<p style="color:#9aa0aa">This overlay shows only in dev. Production renders a clean 500 page (or your <code>routes/500.jsx</code>).</p>
+</body></html>`;
 }
 
 function makeCtx(req, res, url, params) {
