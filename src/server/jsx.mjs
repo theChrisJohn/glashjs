@@ -148,10 +148,26 @@ function compose(h, layouts, Page, props) {
   return tree;
 }
 
-/** Server-render page + layouts to an HTML string. */
+/** Server-render page + layouts to an HTML string (buffered). */
 export async function renderComponent(mod, props) {
   const rt = await preactRuntime();
   if (!rt) throw new Error(MISSING);
   if (typeof mod.Page !== 'function') throw new Error('JSX route must default-export a component');
   return rt.renderToString(compose(rt.h, mod.layouts || [], mod.Page, props));
+}
+
+/** Compose the page + layouts into a vnode (for streaming). */
+export async function composeVNode(mod, props) {
+  const rt = await preactRuntime();
+  if (!rt) throw new Error(MISSING);
+  if (typeof mod.Page !== 'function') throw new Error('JSX route must default-export a component');
+  return compose(rt.h, mod.layouts || [], mod.Page, props);
+}
+
+let _pipeable;
+/** The Node Suspense-streaming renderer, if the installed preact-render-to-string supports it. */
+export async function getPipeableRenderer() {
+  if (_pipeable !== undefined) return _pipeable;
+  try { _pipeable = (await import('preact-render-to-string/stream-node')).renderToPipeableStream; } catch { _pipeable = null; }
+  return _pipeable;
 }

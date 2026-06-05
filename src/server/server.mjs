@@ -7,13 +7,14 @@
 // Every response carries the secure-by-default headers.
 import http from 'node:http';
 import { promises as fs, existsSync, statSync, watch, createReadStream } from 'node:fs';
+import { Transform } from 'node:stream';
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { discoverRoutes, matchRoute, findMiddleware } from './router.mjs';
 import { renderDocument, documentParts, renderMeta, escapeHtml } from './html.mjs';
 import { NAV_CLIENT } from './nav-client.mjs';
-import { isComponentRoute, loadComponentRoute, clientBundle, renderComponent, routeId, findLayouts, clearJsxCaches } from './jsx.mjs';
+import { isComponentRoute, loadComponentRoute, clientBundle, renderComponent, composeVNode, getPipeableRenderer, routeId, findLayouts, clearJsxCaches } from './jsx.mjs';
 import { securityHeaders } from '../security/headers.mjs';
 import { loadConfig } from '../config.mjs';
 
@@ -177,19 +178,41 @@ async function handleComponentPage(res, route, ctx, cfg, secHeaders, root, route
   const { open, tail } = documentParts({
     title, head, offline: cfg.offline, animatedFavicon: !!cfg.animatedFavicon, nonce, dev,
   });
+  const bundleTag = `</div><script type="module" src="/_glash/${id}.js"></script>`;
   res.writeHead(200, { ...pageHeaders(cfg, secHeaders, nonce), 'content-type': 'text/html; charset=utf-8' });
-  res.write(open); // flush the shell first, before rendering the component
+  res.write(open + '<div id="glash-root">'); // flush the shell before rendering
+
+  // True Suspense streaming: render the boundary's fallback into the shell now,
+  // then stream each boundary's real content as its data resolves. preact emits
+  // inline <script> swap tags, so we inject this request's nonce into the stream
+  // to keep the strict CSP intact.
+  const pipeable = await getPipeableRenderer();
+  if (pipeable) {
+    try {
+      const vnode = await composeVNode(mod, props);
+      const inject = new Transform({
+        transform(chunk, _enc, cb) {
+          cb(null, Buffer.from(chunk.toString('utf8').replace(/<script(?=[\s>])/g, `<script nonce="${nonce}"`)));
+        },
+      });
+      inject.pipe(res, { end: false });
+      inject.on('end', () => res.end(bundleTag + tail));
+      const stream = pipeable(vnode, { onError: () => { /* boundary error — keep the shell */ } });
+      stream.pipe(inject);
+      return;
+    } catch { /* fall through to buffered render */ }
+  }
+
+  // Fallback (no streaming renderer): buffered render.
   try {
     const rendered = await renderComponent(mod, props);
-    res.write(`<div id="glash-root">${rendered}</div><script type="module" src="/_glash/${id}.js"></script>`);
+    res.write(rendered + bundleTag);
     res.end(tail);
   } catch (err) {
-    // Shell is already on the wire, so we can't change the status — surface the
-    // error inside the stream (full overlay in dev, a clean message in prod).
     res.write(dev
       ? `<pre style="color:#ff6b6b;white-space:pre-wrap;font:13px ui-monospace,monospace;padding:1rem">${escapeHtml(String(err?.stack || err))}</pre>`
       : '<p style="font:16px system-ui;color:#9aa0aa;padding:1rem">Something went wrong rendering this page.</p>');
-    res.end(tail);
+    res.end(`</div>${tail}`);
   }
 }
 

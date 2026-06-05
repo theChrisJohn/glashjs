@@ -116,7 +116,7 @@ export default function Counter({ start = 0 }) {
 
 Hydration is **CSP-safe**: server props ride in a non-executed `<script type="application/json">` and the hydration bundle is an external `'self'` module with a per-request **nonce** — so the strict CSP stays intact (no `'unsafe-inline'`).
 
-**Nested layouts** (`_layout.jsx` in any routes dir wrap pages root→leaf, server + hydration), **streaming SSR** (the shell flushes before the component renders — `Transfer-Encoding: chunked`), and **instant HMR** (`glash dev` does an in-place soft re-render on save over SSE — no full reload, no flash, and scroll/focus/form-input are preserved across the swap) are all in. **Honest scope:** uses Preact (React-compatible via `preact/compat`), not React; HMR preserves DOM/scroll/input state but **not** component `useState` (that's React-Fast-Refresh via `@prefresh`, still ahead); streaming is shell-flush, not Suspense-chunked.
+**Nested layouts** (`_layout.jsx` in any routes dir wrap pages root→leaf, server + hydration), **streaming SSR** (the shell flushes before the component renders — `Transfer-Encoding: chunked`), and **instant HMR** (`glash dev` does an in-place soft re-render on save over SSE — no full reload, no flash, and scroll/focus/form-input are preserved across the swap) are all in. **Suspense streaming** is in too — wrap a data-dependent subtree in `<Suspense fallback={…}>` (from `preact/compat`) and the shell + fallback flush immediately, then each boundary streams in as its data resolves (`renderToPipeableStream`), with preact's inline swap scripts nonce-injected so the strict CSP holds. **Honest scope:** uses Preact (React-compatible via `preact/compat`), not React; HMR preserves DOM/scroll/input state but **not** component `useState` (that's React-Fast-Refresh via `@prefresh`, still ahead).
 
 ## Usage
 
@@ -178,7 +178,8 @@ animatedFavicon: true,                         // bundled animated glash mark (d
 - [x] `<Link>` client-side navigation (SPA swap of `#glash-root` + re-hydrate; progressive-enhancement `<a>`)
 - [x] `glash deploy` → glashdb (builds, then hands off to the `glashdb` CLI)
 - [x] Production-grade runtime — custom `404`/`500` routes, dev error overlay, HEAD support, Range requests + streamed static (video seeking), graceful mid-stream error handling
-- [ ] React-Fast-Refresh (`useState` preservation via `@prefresh`), Suspense streaming, edge adapter
+- [x] Suspense streaming (`renderToPipeableStream` — fallback in the shell, each boundary streams in as its data resolves; CSP-safe via per-request nonce injection)
+- [ ] React-Fast-Refresh (`useState` preservation via `@prefresh`; browser-verified), edge adapter
 - [ ] `<Image>` / `<Video>` components that emit `<picture>`/`<source>` from the manifest
 - [ ] Edge adapter for the glashdb Worker (serve `.br`/`.avif` by `Accept`)
 - [ ] `glash deploy` → glashdb hosting in one command
