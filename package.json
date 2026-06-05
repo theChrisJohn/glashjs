@@ -1,6 +1,6 @@
 {
   "name": "glashjs",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "glashjs — a web framework built on top of Next.js: file-based routing, SSR, API routes, JSX components with client hydration, nested layouts, streaming SSR, a best-in-class build-time asset optimizer, offline PWA layer, animated favicon, and secure-by-default headers. Zero mandatory dependencies.",
   "type": "module",
   "bin": {

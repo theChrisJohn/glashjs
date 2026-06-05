@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 // glashjs CLI
 import { readFileSync } from 'node:fs';
+import os from 'node:os';
 import { build } from '../src/build.mjs';
 import { optimizeAssets } from '../src/assets/optimize.mjs';
 import { createGlashServer } from '../src/server/server.mjs';
 import { deploy } from '../src/deploy.mjs';
+import { update } from '../src/update.mjs';
 
 const VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 const [, , cmd, ...rest] = process.argv;
@@ -14,17 +16,34 @@ function arg(name, fallback) {
   return i >= 0 && rest[i + 1] ? rest[i + 1] : fallback;
 }
 
+// LAN IPv4 addresses, so the dev server prints a Network URL you can open from
+// your phone or another device on the same network.
+function lanAddresses() {
+  const out = [];
+  const ifaces = os.networkInterfaces();
+  for (const name of Object.keys(ifaces)) {
+    for (const i of ifaces[name] || []) {
+      if (i.family === 'IPv4' && !i.internal) out.push(i.address);
+    }
+  }
+  return out;
+}
+
 async function serve(dev) {
   const root = arg('--root', process.cwd());
   const { listen, cfg, routes } = await createGlashServer({ root, dev });
   const port = Number(arg('--port', cfg.port || 3000));
-  const { host } = await listen(port);
+  await listen(port);
   const pages = routes.filter((r) => !r.isApi).length;
   const apis = routes.filter((r) => r.isApi).length;
   console.log(`\nglashjs ${dev ? 'dev' : 'serve'} — "${cfg.name}"`);
   console.log(`  ${pages} page route(s), ${apis} api route(s)`);
   routes.forEach((r) => console.log(`    ${r.isApi ? 'api ' : 'page'}  ${r.pattern}`));
-  console.log(`\n  ▶ http://localhost:${port}${dev ? '   (live route reload)' : ''}\n`);
+  console.log('');
+  console.log(`  ➜ Local:    http://localhost:${port}`);
+  for (const ip of lanAddresses()) console.log(`  ➜ Network:  http://${ip}:${port}   (preview on other devices)`);
+  if (dev) console.log('\n  live reload on save · ctrl-c to stop');
+  console.log('');
 }
 
 async function main() {
@@ -38,6 +57,10 @@ async function main() {
       await deploy({ root: arg('--root', process.cwd()), dryRun: rest.includes('--dry-run'), args: passthrough });
       break;
     }
+    case 'update':
+    case 'upgrade':
+      await update({ root: arg('--root', process.cwd()) });
+      break;
     case 'dev':
       await serve(true);
       break;
@@ -66,6 +89,7 @@ Usage:
   glash serve [--port 3000]     Run the production server over routes/ + built assets
   glash build [--root <dir>]    Optimize assets, generate offline SW + PWA + security manifests
   glash deploy [--dry-run]      Build, then deploy to glashdb (hands off to the glashdb CLI)
+  glash update                  Update glashjs to the latest published version
   glash optimize [<dir>]        Just run the asset optimizer over a directory
   glash version                 Print version
 

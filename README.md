@@ -75,8 +75,12 @@ export const POST = (ctx) => json({ created: ctx.body }, { status: 201 });
 ```
 
 ```bash
-glash dev      # dev server: routing + SSR + API, live route reload
+glash dev      # dev server (live reload) — prints a Local + Network (LAN IP) URL
+               #   ➜ Local:    http://localhost:3000
+               #   ➜ Network:  http://192.168.1.57:3000   (open from your phone/other devices)
 glash serve    # production server over routes/ + built assets (Brotli-negotiated)
+glash update   # update glashjs to the latest published version
+glash deploy   # build, then deploy to glashdb
 ```
 
 **`<Image>`** (better than `next/image` — no runtime image server, uses the build's AVIF/WebP):
